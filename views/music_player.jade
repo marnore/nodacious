@@ -1,0 +1,14 @@
+//Created by marius-pc on 7/6/15.
+
+extends layout
+
+block content
+    h1= 'Music Player. Choose an action'
+    p
+        button(onclick="window.location.replace('/music_player/play')") Play
+        button(onclick="window.location.replace('/music_player/stop')") Stop
+        button(onclick="window.location.replace('/music_player/radio')") Radio
+
+    form(action="/music_player/upload", method="post", enctype="multipart/form-data")
+        input(type="file", name="displayImage")
+        input(type="submit", value="upload")
