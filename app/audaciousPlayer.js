@@ -87,6 +87,10 @@ audaciousPlayer.prototype.getStatus = function() {
     return this.status;
 }
 
+audaciousPlayer.prototype.currentQueue = function() {
+    return [];
+}
+
 var apInstance = new audaciousPlayer();
 
 module.exports = apInstance;
