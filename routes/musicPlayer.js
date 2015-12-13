@@ -3,6 +3,7 @@ var request = require('request');
 var fs = require('fs');
 var multer = require('multer');
 
+
 // var storage = multer.diskStorage({
 //   destination: function (req, file, cb) {
 //     cb(null, '/uploads');
@@ -15,7 +16,7 @@ var multer = require('multer');
 
 var upload = multer({ dest: 'uploads/' });
 
-var player = {};//require('../app/audaciousPlayer');
+var player = require('../app/audaciousPlayer');
 
 
 var router = express.Router();
@@ -106,7 +107,7 @@ router.get('/folders', function(req, res, next) {
         var stat = fs.statSync(dir + '/' + file);
         return stat.isDirectory();
     });
-    res.json(dirsArray);
+    res.json({"subFolders": dirsArray});
 });
 
 router.get('/songs', function(req, res, next) {
@@ -114,16 +115,40 @@ router.get('/songs', function(req, res, next) {
     if (req.query && req.query.dir) {
         dir += req.query.dir;
     }
-    var dirsArray;
+    var songsArray;
     try {
-        dirsArray = fs.readdirSync(dir).filter(function(file) {
+        songsArray = fs.readdirSync(dir).filter(function(file) {
             var stat = fs.statSync(dir + '/' + file);
             return stat.isFile(); //TODO add file extension filter
         });
     } catch (error) {
         res.json({error: "Not Found"});
     }
-    res.json(dirsArray);
+    var songs = songsArray.map(function(file) {
+        return {
+            fileName: file,
+            artist: 'Artist',
+            title: 'Title',
+            length: 500,
+        }
+    });
+    res.json({"songs": songs});
+});
+
+router.post('/createFolder', function(req, res) {
+    var dir = req.body.dir;
+    var name = req.body.name;
+    var path = musicRootDir;
+    if (dir != null) {
+        path += '/' + path;
+    }
+    path += '/' + name;
+    try {
+        fs.mkdirSync(path);
+    } catch(e) {
+        if ( e.code != 'EEXIST' ) throw e;
+    }
+    res.json({dir: path});
 });
 
 router.post('/upload', upload.single('songFile'), function(req, res, next){

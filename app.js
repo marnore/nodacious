@@ -9,6 +9,7 @@ var routes = require('./routes/index');
 var users = require('./routes/users');
 var musicPlayer = require('./routes/musicPlayer');
 
+var bodyParser = require('body-parser');
 
 var app = express();
 
@@ -27,6 +28,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', routes);
 app.use('/users', users);
 app.use('/music_player', musicPlayer);
+
+app.use(bodyParser.json()); // support json encoded bodies
+app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
