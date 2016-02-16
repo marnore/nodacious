@@ -18,6 +18,8 @@
     "multer": "~1.0.6"
   },
   "devDependencies": {
-    "body-parser": "~1.13.3"
+    "body-parser": "~1.13.3",
+    "path": "~0.12.7",
+    "html-entities": "~1.2.0"
   }
 }

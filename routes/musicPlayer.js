@@ -2,6 +2,7 @@ var express = require('express');
 var request = require('request');
 var fs = require('fs');
 var multer = require('multer');
+var path = require('path');
 
 
 // var storage = multer.diskStorage({
@@ -16,31 +17,73 @@ var multer = require('multer');
 
 var upload = multer({ dest: 'uploads/' });
 
-var player = require('../app/audaciousPlayer');
-
+var player = require('../app/mplayer');
+player.initialize();
 
 var router = express.Router();
 
-
-
 var musicRootDir = '/media/disk/Music/'
 var type = ''; //music, radio
+var playlist = [];
+var currPlayIndex = -1;
 
 console.log('Initializing controller');
 
-function initMusic() {
+function songsInDir(dir) {
+    return fs.readdirSync(dir).filter(function(file) {
+        var stat = fs.statSync(dir + '/' + file);
+        return stat.isFile() && path.extname(file) === ".mp3";
+    });
+}
+
+function isMusicFile(stat, file) {
+    var ext = path.extname(file).toLowerCase();
+    return stat.isFile() && (ext === ".mp3" || ext === ".flac" || ext === ".wma" || ext === ".ogg");
+}
+
+function initMusic(song) {
     type = 'music';
-    player.play(musicRootDir + 'Kygo Discography/');
+    playlist = [];
+    var toPlay = song;
+    if (!toPlay) {
+        toPlay = musicRootDir + 'Kygo Discography/';
+    }
+    if (fs.lstatSync(toPlay).isDirectory()) {
+        playlist = songsInDir(toPlay).map(function(song) {
+            return path.join(toPlay, song);
+        });
+        //console.log('Playlist');
+        //console.log(playlist);
+        if (playlist.length >= 1) {
+            player.play(playlist[0]);
+        }
+        if (playlist.length >= 2) {
+            player.enqueue(playlist.slice(1, 2));
+        }
+        currPlayIndex = 0;
+    } else {
+        if (toPlay) {
+            playlist = [toPlay];
+            currPlayIndex = 0;
+            player.play(toPlay);
+        }
+    }
+
 }
 
 function initRadio(streamUrl) {
     console.log('stream url is ' + streamUrl + '   []');
     type = 'radio';
+    playlist = [streamUrl];
     player.play(streamUrl);
 }
 
 function renderCurrentStatus(req, res) {
-    res.render('music_player', {title: 'Music Player ' + player.getStatus()});
+    res.render('music_player', {
+        title: 'Music Player ' + player.getStatus(), 
+        currPlayIndex: currPlayIndex,
+        currSong: playlist[currPlayIndex]
+    });
 }
 
 function renderError(req, res, error) {
@@ -55,10 +98,19 @@ router.get('/', function(req, res, next) {
 
 router.get('/play', function(req, res, next) {
     if (type !== 'music') {
-        initMusic();
+        initMusic(req.param.song);
     } else {
-        player.play();
+        if (req.param.song) {
+            player.play(req.param.song);
+        } else {
+            player.play();
+        }
     }
+    renderCurrentStatus(req, res);
+});
+
+router.get('/pause', function(req, res, next) {
+    player.pause();
     renderCurrentStatus(req, res);
 });
 
@@ -69,12 +121,26 @@ router.get('/stop', function(req, res, next) {
 
 router.get('/next', function(req, res, next) {
     player.next();
+    currPlayIndex = (currPlayIndex + 1) % playlist.length;
     renderCurrentStatus(req, res);
 });
 
 router.get('/prev', function(req, res, next) {
     player.prev();
+    currPlayIndex = currPlayIndex > 0 ? currPlayIndex - 1 : playlist.length - 1;
     renderCurrentStatus(req, res);
+});
+
+router.get('/volume', function(req, res, next) {
+    console.log(req.query);
+    if (req.query.value) {
+        player.volume(Math.max(Math.min(req.query.value, 100), 0));    //clamp to 0..100    
+    }
+    renderCurrentStatus(req, res);
+});
+
+router.get('/playlist', function(req, res, next) {
+    res.json({'playlist': playlist});
 });
 
 router.get('/radio', function(req, res, next) {
@@ -100,7 +166,7 @@ router.get('/radio', function(req, res, next) {
 router.get('/folders', function(req, res, next) {
     var dir = musicRootDir;
     if (req.query && req.query.dir) {
-        dir += req.query.dir;
+        dir += decodeURI(req.query.dir);
     }
     console.log(dir);
     var dirsArray = fs.readdirSync(dir).filter(function(file) {
@@ -113,17 +179,21 @@ router.get('/folders', function(req, res, next) {
 router.get('/songs', function(req, res, next) {
     var dir = musicRootDir;
     if (req.query && req.query.dir) {
-        dir += req.query.dir;
+        dir += decodeURI(req.query.dir);
+        //dir = path.join(dir, req.query.dir);
+        console.log(dir);
     }
     var songsArray;
     try {
         songsArray = fs.readdirSync(dir).filter(function(file) {
             var stat = fs.statSync(dir + '/' + file);
-            return stat.isFile(); //TODO add file extension filter
+            return isMusicFile(stat, file); //TODO add file extension filter
         });
     } catch (error) {
         res.json({error: "Not Found"});
     }
+    //to get file infoes
+    //mplayer -vo null -ao null -identify -frames 0 01\ Paul\ Keeley\ -\ Paper\ Jet.flac
     var songs = songsArray.map(function(file) {
         return {
             fileName: file,

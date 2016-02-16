@@ -4,12 +4,22 @@ extends layout
 
 block content
     h1= 'Music Player. Choose an action'
-    h3.errro= error
+    h3.error= error
     p
         button(onclick="window.location.replace('/music_player/play')") Play
+        button(onclick="window.location.replace('/music_player/pause')") Pause
         button(onclick="window.location.replace('/music_player/stop')") Stop
         button(onclick="window.location.replace('/music_player/radio')") Radio
-
+        span &nbsp;&nbsp;
+        button(onclick="window.location.replace('/music_player/prev')") Prev
+        button(onclick="window.location.replace('/music_player/next')") Next
+    p
+        button(onclick="window.location.replace('/music_player/playlist')") Playlist
     form(action="/music_player/upload", method="post", enctype="multipart/form-data")
         input(type="file", name="songFile")
         input(type="submit", value="upload")
+    p
+        span Current index #{currPlayIndex}
+        br
+        span Current song #{currSong}
+
