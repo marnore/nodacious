@@ -43,57 +43,115 @@ function isMusicFile(stat, file) {
 
 function initMusic(song) {
     type = 'music';
-    playlist = [];
-    var toPlay = song;
-    if (!toPlay) {
-        toPlay = musicRootDir + 'Kygo Discography/';
-    }
-    if (fs.lstatSync(toPlay).isDirectory()) {
-        playlist = songsInDir(toPlay).map(function(song) {
-            return path.join(toPlay, song);
-        });
-        //console.log('Playlist');
-        //console.log(playlist);
-        if (playlist.length >= 1) {
-            player.play(playlist[0]);
-        }
-        if (playlist.length >= 2) {
-            player.enqueue(playlist.slice(1, 2));
-        }
-        currPlayIndex = 0;
-    } else {
-        if (toPlay) {
-            playlist = [toPlay];
-            currPlayIndex = 0;
-            player.play(toPlay);
-        }
-    }
-
+    playSong(song || musicRootDir + 'Kygo Discography/');
 }
 
 function initRadio(streamUrl) {
-    console.log('stream url is ' + streamUrl + '   []');
+    console.log('stream url is "' + streamUrl + '"');
     type = 'radio';
-    playlist = [streamUrl];
+    playlist = [{fileName: streamUrl}];
     player.play(streamUrl);
 }
 
 function renderCurrentStatus(req, res) {
-    res.render('music_player', {
-        title: 'Music Player ' + player.getStatus(), 
-        currPlayIndex: currPlayIndex,
-        currSong: playlist[currPlayIndex]
-    });
+    if (req.headers && req.headers.accept && req.headers.accept.split(',')[0].toLowerCase() === "text/html") {
+        res.render('music_player', {
+            title: 'Music Player ' + player.getStatus(), 
+            currPlayIndex: currPlayIndex,
+            currSong: playlist[currPlayIndex],
+            playlist: playlist
+        });    
+    } else {
+        console.log("json");
+        res.json({
+            status: player.getStatus(),
+            currSong: currPlayIndex === -1 || currPlayIndex >= playlist.length ? null : playlist[currPlayIndex],
+            currPlayIndex: currPlayIndex,
+        });
+    }
+    console.log(req.headers);
+    
 }
 
 function renderError(req, res, error) {
-    res.render('music_player', {title: 'Music Player ' + player.getStatus(), error: error});
+    res.render('music_player', {
+        title: 'Music Player ' + player.getStatus(),
+        error: error,
+        currPlayIndex: currPlayIndex,
+        currSong: playlist[currPlayIndex],
+        playlist: playlist
+    });
 }
 
 
 router.get('/', function(req, res, next) {
     player.initialize();
     renderCurrentStatus(req, res);
+});
+
+function playSong(song, enqueueAll) {
+    var filesToPlay = [];
+    var toPlay = song;
+    if (!toPlay) {
+        return;
+    }
+    if (fs.lstatSync(toPlay).isDirectory()) {
+        filesToPlay = songsInDir(toPlay).map(function(song) {
+            return path.join(toPlay, song);
+        });
+        if (!enqueueAll) {
+            if (filesToPlay.length >= 1) {
+                player.play(filesToPlay[0]);
+            }
+            if (filesToPlay.length >= 2) {
+                player.enqueue(filesToPlay.slice(1));
+            }
+            currPlayIndex = 0;
+        } else {
+            player.enqueue(filesToPlay);
+        }
+
+
+    } else {
+        if (toPlay) {
+            filesToPlay = [toPlay];
+            if (!enqueueAll) {
+                currPlayIndex = 0;
+                player.play(toPlay);
+            } else {
+                player.enqueue(toPlay);
+            }
+        }
+    }
+
+    var pl = filesToPlay.map(function(fileToPlay) {
+        return { fileName: fileToPlay };
+    });
+    if (!enqueueAll) {
+        playlist = pl;
+        currPlayIndex = 0;
+    } else {
+        playlist = playlist.concat(pl);
+    }
+    player.getSongInfo(filesToPlay, function(result) {
+        result.forEach(function(item) {
+            item.fileName = path.basename(item.fileName);
+        });
+        if (!enqueueAll) {
+            playlist = result;
+        } else {
+            playlist = playlist.concat(result);
+        }
+
+    });
+}
+
+router.post('/enqueue', function(req, res, next) {
+    var toEnqueue = req.body.toEnqueue;
+    if (toEnqueue) {
+        playSong(toEnqueue, true);  //add those all to the end of the list
+    }
+    
 });
 
 router.get('/play', function(req, res, next) {
@@ -132,11 +190,12 @@ router.get('/prev', function(req, res, next) {
 });
 
 router.get('/volume', function(req, res, next) {
-    console.log(req.query);
-    if (req.query.value) {
-        player.volume(Math.max(Math.min(req.query.value, 100), 0));    //clamp to 0..100    
+    if (req.query.value && req.query.value >= 0) {
+        var volume = Math.max(Math.min(req.query.value, 100), 0); //clamp to 0..100    
+        player.volume(volume);    
     }
-    renderCurrentStatus(req, res);
+    res.json({"volume": player.volume()});  //return correct volume
+    //renderCurrentStatus(req, res);
 });
 
 router.get('/playlist', function(req, res, next) {
@@ -173,7 +232,7 @@ router.get('/folders', function(req, res, next) {
         var stat = fs.statSync(dir + '/' + file);
         return stat.isDirectory();
     });
-    res.json({"subFolders": dirsArray});
+    res.json({"folders": dirsArray});
 });
 
 router.get('/songs', function(req, res, next) {
@@ -183,17 +242,18 @@ router.get('/songs', function(req, res, next) {
         //dir = path.join(dir, req.query.dir);
         console.log(dir);
     }
-    var songsArray;
+    var songsArray = [];
     try {
         songsArray = fs.readdirSync(dir).filter(function(file) {
             var stat = fs.statSync(dir + '/' + file);
             return isMusicFile(stat, file); //TODO add file extension filter
         });
     } catch (error) {
-        res.json({error: "Not Found"});
+        //res.json({error: "Not Found"});
+
     }
     //to get file infoes
-    //mplayer -vo null -ao null -identify -frames 0 01\ Paul\ Keeley\ -\ Paper\ Jet.flac
+    //
     var songs = songsArray.map(function(file) {
         return {
             fileName: file,

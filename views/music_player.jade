@@ -23,3 +23,7 @@ block content
         br
         span Current song #{currSong}
 
+    ul
+        each song in playlist
+            li= song.artist + ' - ' + song.title + '.  ' + song.fileName
+

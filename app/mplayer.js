@@ -85,22 +85,29 @@ mplayer.prototype.shutdown = function() {
 
 mplayer.prototype.play = function(fileOrUrl) {
 	console.log('DEBUG: ' + "play. Curr status " + this.status + " will play " + fileOrUrl);
-    if (this.status === "paused") {
-    	this.pause();
-    } else if (this.status === "playing") {
-    	//do nothing
-    } else if (this.status === "stopped") {
+    
+    if (fileOrUrl) {
+		this.shutdown();
     	this.playlist = [fileOrUrl];
     	this.terminal.stdin.write('mplayer -slave -quiet -novideo "' + fileOrUrl + '"\n');
     	this.status = "playing";
-    }
+	} else {
+		if (this.status === "paused") {
+	    	this.pause();
+	    } else if (this.status === "playing") {
+	    	//do nothing
+	    } else if (this.status === "stopped") {
+	    	this.status = "paused";
+	    	this.pause();
+	    }
+	}
 }
 
 mplayer.prototype.enqueue = function(fileOrUrl) {
 	var all = [].concat(fileOrUrl);
 	var self = this;
 	all.forEach(function(item) {
-		console.log('DEBUG: Adding playlist file ' + item);
+		//console.log('DEBUG: Adding playlist file ' + item);
 		self.playlist.push(item);
     	self.terminal.stdin.write('loadfile "' + item + '" 1\n');
 	});
@@ -112,6 +119,7 @@ mplayer.prototype.playAll = function(list) {
 }
 
 mplayer.prototype.pause = function() {
+	if (this.status === "stopped") return;	//do nothing while paused
 	console.log('DEBUG: ' + "pause. Curr status " + this.status);
 	this.terminal.stdin.write('pause\n');
 	if (this.status === "paused") {
@@ -123,10 +131,12 @@ mplayer.prototype.pause = function() {
 
 mplayer.prototype.stop = function() {
 	console.log('DEBUG: ' + "stop. Curr status " + this.status);
-    this.terminal.stdin.write('pt_step 0\n');
-    //this.pause();
+    if (this.status !== "paused") {
+    	this.pause();
+	}
     //this.terminal.stdin.write('pause\n');
-    //this.status = "stopped";
+    this.seek(0);
+    this.status = "stopped";
 }
 
 mplayer.prototype.next = function() {
@@ -148,9 +158,12 @@ mplayer.prototype.mute = function(mute) {
 }
 
 mplayer.prototype.volume = function(percentage) {
-	console.log('DEBUG volume ' + percentage);
+	if (percentage === undefined || percentage < 0) {
+		return this.currentVolume;
+	}
 	this.currentVolume = percentage;
     this.terminal.stdin.write('volume ' + percentage + ' 1\n');
+    return this.currentVolume;
 }
 
 mplayer.prototype.getStatus = function() {
@@ -159,6 +172,57 @@ mplayer.prototype.getStatus = function() {
 
 mplayer.prototype.currentQueue = function() {
     return this.playlist;
+}
+
+mplayer.prototype.getSongInfo = function(fileNames, callback) {
+	var files = [].concat(fileNames);
+console.log(files);
+	if (!files.length) return;
+
+	var terminal = child_process.spawn('bash');
+	var artistID = -1;
+	var titleID = -1;
+	var songInfo = {};
+	var parsed = [];
+	var index = 0;
+	terminal.on('close', (code) => {
+		console.log(`child process exited with code ${code}`);
+	});
+	terminal.stdout.on('data', function(data) {
+		//console.log('Got: ' + data);
+		var lines = data.toString().split('\n');
+		if (lines) {
+			lines.forEach(function(line) {
+				var segments = line.split('=');
+				if (segments[1] === "artist") {
+					artistID = segments[0].substring(segments[0].length - 1);
+				} else if (segments[1] === "title") {
+					titleID = segments[0].substring(segments[0].length - 1);
+				} else if (segments[0] === "ID_CLIP_INFO_VALUE" + artistID) {
+					songInfo.artist = segments[1];
+				} else if (segments[0] === "ID_CLIP_INFO_VALUE" + titleID) {
+					songInfo.title = segments[1];
+				} else if (segments[0] === "ID_FILENAME") {
+					songInfo.fileName = segments[1];
+				} else if (segments[1] === "EOF") {	//end of parsing
+					parsed[index] = songInfo;
+					songInfo = {};
+					if (index < files.length) {
+						//console.log('passing song ' + files[index]);
+						terminal.stdin.write('mplayer -vo null -ao null -identify -frames 0 "' + files[index++] + '"\n');
+					} else {
+						terminal.stdin.write('exit\n');
+						callback(parsed);
+					}
+				}
+				
+			})
+		}
+	});
+
+	terminal.stdin.write('mplayer -vo null -ao null -identify -frames 0 "' + files[index] + '"\n');
+
+	
 }
 
 module.exports = new mplayer();
