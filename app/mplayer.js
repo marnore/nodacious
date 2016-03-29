@@ -84,7 +84,7 @@ mplayer.prototype.shutdown = function() {
 
 
 mplayer.prototype.play = function(fileOrUrl) {
-	console.log('DEBUG: ' + "play. Curr status " + this.status + " will play " + fileOrUrl);
+	console.log("DEBUG: play. Curr status " + this.status + " will play " + fileOrUrl);
     
     if (fileOrUrl) {
 		this.shutdown();
@@ -120,13 +120,13 @@ mplayer.prototype.playAll = function(list) {
 
 mplayer.prototype.pause = function() {
 	if (this.status === "stopped") return;	//do nothing while paused
-	console.log('DEBUG: ' + "pause. Curr status " + this.status);
 	this.terminal.stdin.write('pause\n');
 	if (this.status === "paused") {
     	this.status = "playing";
 	} else if (this.status === "playing") {
 		this.status = "paused";
 	}
+	console.log('DEBUG: ' + "pause. Curr status " + this.status);
 }
 
 mplayer.prototype.stop = function() {
@@ -176,7 +176,7 @@ mplayer.prototype.currentQueue = function() {
 
 mplayer.prototype.getSongInfo = function(fileNames, callback) {
 	var files = [].concat(fileNames);
-console.log(files);
+//console.log(files);
 	if (!files.length) return;
 
 	var terminal = child_process.spawn('bash');

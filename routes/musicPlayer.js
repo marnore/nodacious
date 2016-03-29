@@ -69,7 +69,8 @@ function renderCurrentStatus(req, res) {
             currPlayIndex: currPlayIndex,
         });
     }
-    console.log(req.headers);
+    //console.log('Request headers');
+    //console.log(req.headers);
     
 }
 
@@ -89,13 +90,20 @@ router.get('/', function(req, res, next) {
     renderCurrentStatus(req, res);
 });
 
+//playing and enqueuing should go through here
+//song can be either an array or a string.
 function playSong(song, enqueueAll) {
     var filesToPlay = [];
     var toPlay = song;
     if (!toPlay) {
         return;
     }
-    if (fs.lstatSync(toPlay).isDirectory()) {
+    var ls = null;
+    try {
+        ls = fs.lstatSync(toPlay);
+    } catch (e) {}
+
+    if (ls && ls.isDirectory()) {
         filesToPlay = songsInDir(toPlay).map(function(song) {
             return path.join(toPlay, song);
         });
@@ -133,17 +141,20 @@ function playSong(song, enqueueAll) {
     } else {
         playlist = playlist.concat(pl);
     }
-    player.getSongInfo(filesToPlay, function(result) {
-        result.forEach(function(item) {
-            item.fileName = path.basename(item.fileName);
-        });
-        if (!enqueueAll) {
-            playlist = result;
-        } else {
-            playlist = playlist.concat(result);
-        }
+    //get song info for existing files (not urls)
+    if (ls) {
+        player.getSongInfo(filesToPlay, function(result) {
+            result.forEach(function(item) {
+                item.fileName = path.basename(item.fileName);
+            });
+            if (!enqueueAll) {
+                playlist = result;
+            } else {
+                playlist = playlist.concat(result);
+            }
 
-    });
+        });
+    }
 }
 
 router.post('/enqueue', function(req, res, next) {
@@ -159,9 +170,11 @@ router.get('/play', function(req, res, next) {
         initMusic(req.param.song);
     } else {
         if (req.param.song) {
-            player.play(req.param.song);
+            playSong(musicRootDir + req.param.song);
+            //player.play(req.param.song);
         } else {
-            player.play();
+            playSong(musicRootDir);
+            //player.play();
         }
     }
     renderCurrentStatus(req, res);
@@ -173,6 +186,7 @@ router.get('/pause', function(req, res, next) {
 });
 
 router.get('/stop', function(req, res, next) {
+    type = '';
     player.stop();
     renderCurrentStatus(req, res);
 });
@@ -202,22 +216,44 @@ router.get('/playlist', function(req, res, next) {
     res.json({'playlist': playlist});
 });
 
+function parseM3U(body) {
+    var found = null;
+    body.split('\r\n').some(function(line) {
+        if (line.indexOf('http') === 0) {
+            found = line;
+            return true;
+        }
+    });
+    return found;
+}
+
+// Initialize the whole radio playlist here
 router.get('/radio', function(req, res, next) {
     // var file = fs.createWriteStream("temp/stream");
-
     // request.get('http://www.zipfm.lt/in/listen.php').pipe(file).on('close', function () {
     //     terminal.stdin.write('audacious temp/stream\n');   
     // });
 
     if (type !== 'radio') {
-        request.get('http://www.zipfm.lt/in/listen.php', function(err, response, body) {
+
+        var otherRadioCallback = function(err, response, body) {
             if (!err && body) {
-                initRadio(body.split('\r\n')[0]);    
+                var url = parseM3U(body);
+                if (url) playSong(url, true);
+            }
+        }
+        var zipfmCallback = function(err, response, body) {
+            if (!err && body) {
+                initRadio(body.split('\r\n')[0]);
+                //hot fm
+               request.get('http://www.hotfm.lt/modules/mod_ngs_shoutcast/singleplaylist.php?ip=193.46.83.8&port=8000&format=M3U', otherRadioCallback);
+               //request.get('http://82.135.234.195:8000/pukas2.aac.m3u', otherRadioCallback);
             } else {
                 renderError(req, res, err);
             }
             
-        });
+        };
+        request.get('http://www.zipfm.lt/in/listen.php', zipfmCallback);
     }
     renderCurrentStatus(req, res);
 });
@@ -227,7 +263,7 @@ router.get('/folders', function(req, res, next) {
     if (req.query && req.query.dir) {
         dir += decodeURI(req.query.dir);
     }
-    console.log(dir);
+    //console.log(dir);
     var dirsArray = fs.readdirSync(dir).filter(function(file) {
         var stat = fs.statSync(dir + '/' + file);
         return stat.isDirectory();
@@ -240,7 +276,7 @@ router.get('/songs', function(req, res, next) {
     if (req.query && req.query.dir) {
         dir += decodeURI(req.query.dir);
         //dir = path.join(dir, req.query.dir);
-        console.log(dir);
+        //console.log(dir);
     }
     var songsArray = [];
     try {
@@ -282,11 +318,10 @@ router.post('/createFolder', function(req, res) {
 });
 
 router.post('/upload', upload.single('songFile'), function(req, res, next){
-    console.log(req.file);
+
     fs.readFile(req.file.path, function (err, data) {
         var newPath = __dirname + "/../uploads/" + req.file.originalname;
         fs.writeFile(newPath, data, function (err) {
-            console.log(arguments);
             fs.unlinkSync(req.file.path);
             res.redirect("/music_player");
         });
