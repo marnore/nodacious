@@ -148,8 +148,8 @@ router.get('/play', function(req, res, next) {
             playSong(musicRootDir + req.param.song);
             //player.play(req.param.song);
         } else {
-            playSong(musicRootDir);
-            //player.play();
+            //playSong(musicRootDir);
+            player.play();
         }
     }
     renderCurrentStatus(req, res);
@@ -161,7 +161,7 @@ router.get('/pause', function(req, res, next) {
 });
 
 router.get('/stop', function(req, res, next) {
-    type = '';
+    //type = '';
     player.stop();
     renderCurrentStatus(req, res);
 });

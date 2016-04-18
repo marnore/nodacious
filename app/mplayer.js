@@ -7,7 +7,7 @@ function startsWith(hay, needle, caseInsensitive) {
 	return hay.indexOf(needle) === 0;
 }
 
-function outputParser(playingCallback) {
+function outputParser(mplayer, playingCallback) {
 	var dummy = {
 		onSongChanged: function(info){
 			console.log('Dummy listener: ');
@@ -32,6 +32,7 @@ function outputParser(playingCallback) {
 				//kind of heavy but ok..
 				self.fileName = l.substring("Playing ".length, l.length - 1);
 				self.needsUpdate = true;
+                mplayer.currPlayingFile = self.fileName;
 			} else if (startsWith(l, "artist")) {
 				self.artist = l.substring("artist: ".length);
 			} else if (startsWith(l, "title")) {
@@ -56,9 +57,10 @@ function mplayer(playingCallback) {
     this.terminal = child_process.spawn('bash');
     this.currentVolume = 50;
     this.playlist = [];
+    this.currPlayingFile = null;    //for restoring playing item on exit
 
     //this.audacious = child_process.spawn('audacious');
-    var parser = new outputParser(playingCallback);
+    var parser = new outputParser(this, playingCallback);
     this.terminal.stdout.on('data', function (data) {
        console.log('stdout: ' + data);
        parser.parse(data.toString());
@@ -77,7 +79,7 @@ mplayer.prototype.shutdown = function() {
     this.terminal.stdin.write('quit\n');
     this.terminal.stdin.write('killall mplayer\n');
     this.initialized = false;
-    this.playlist = [];
+    //this.playlist = [];
     this.status = 'stopped';
     console.log('mplayer shut down');
 }
@@ -97,8 +99,29 @@ mplayer.prototype.play = function(fileOrUrl) {
 	    } else if (this.status === "playing") {
 	    	//do nothing
 	    } else if (this.status === "stopped") {
-	    	this.status = "paused";
-	    	this.pause();
+	    	//this.status = "paused";
+	    	//this.pause();
+            //there was a play command without fileOrUrl. Let's try to restore state
+            if (this.playlist && this.playlist.length) {
+                var oldPlaylist = this.playlist.slice();    //make a copy so it won't get ruined during play/enqueue
+                if (oldPlaylist.length > 0) {
+                    this.play(oldPlaylist[0]);//must start playing, so the mplayer instance is initialized
+                    this.pause();   //instantly pause and check which song do we really need to play
+                    //put all the songs back to playlist
+                    var indexToPlay = -1;
+                    for (var i = 0; i < oldPlaylist.length; i++) {
+                        this.enqueue(oldPlaylist[i]);
+                        if (oldPlaylist[i] === this.currPlayingFile) {
+                            indexToPlay = i;
+                        }
+                    }
+                    if (indexToPlay > -1) {
+                        this.terminal.stdin.write('pt_step ' + (indexToPlay + 1) + '\n');
+                    }
+                    this.pause();
+                }
+
+            }
 	    }
 	}
 }
@@ -131,12 +154,12 @@ mplayer.prototype.pause = function() {
 
 mplayer.prototype.stop = function() {
 	console.log('DEBUG: ' + "stop. Curr status " + this.status);
-    if (this.status !== "paused") {
-    	this.pause();
-	}
-    //this.terminal.stdin.write('pause\n');
-    this.seek(0);
+ //    if (this.status !== "paused") {
+ //    	this.pause();
+	// }
+ //    this.seek(0);
     this.status = "stopped";
+    this.terminal.stdin.write('stop\n');
 }
 
 mplayer.prototype.next = function() {
