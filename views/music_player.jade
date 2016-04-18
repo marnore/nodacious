@@ -15,7 +15,7 @@ block content
         button(onclick="window.location.replace('/music_player/next')") Next
     p
         button(onclick="window.location.replace('/music_player/playlist')") Playlist
-    form(action="/music_player/upload", method="post", enctype="multipart/form-data")
+    form(action="/content/upload", method="post", enctype="multipart/form-data")
         input(type="file", name="songFile")
         input(type="submit", value="upload")
     p
