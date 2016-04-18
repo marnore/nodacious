@@ -13,6 +13,9 @@ block content
         span &nbsp;&nbsp;
         button(onclick="window.location.replace('/music_player/prev')") Prev
         button(onclick="window.location.replace('/music_player/next')") Next
+        span &nbsp;&nbsp;
+        button(onclick="window.location.replace('/music_player/heartbeat?enable=on')") Enable Heartbeat
+        button(onclick="window.location.replace('/music_player/heartbeat')") Heartbeat
     p
         button(onclick="window.location.replace('/music_player/playlist')") Playlist
     form(action="/content/upload", method="post", enctype="multipart/form-data")

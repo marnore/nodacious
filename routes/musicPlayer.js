@@ -65,6 +65,44 @@ router.get('/', function(req, res, next) {
     renderCurrentStatus(req, res);
 });
 
+/*
+ *  Some experimental stuff
+ */
+
+router.get('/heartbeat', function(req, res, next) {
+    if (req.query.enable) {
+        if (req.query.enable === "on") {
+            heartBeatEnabled = true;
+        } else {
+            heartBeatEnabled = false;
+        }
+        setHeartBeat(heartBeatEnabled);
+    } else {
+        receivedHeartBeat();
+    }
+    renderCurrentStatus(req, res); 
+});
+
+var heartBeatEnabled = false;
+var HEART_BEAT_INTERVAL = 5000;    //ms
+var timer = null
+
+function setHeartBeat(enabled) {
+    if (timer) {
+        clearTimeout(timer);
+    }
+    if (enabled) {
+        timer = setTimeout(function() {
+            player.stop();
+        }, HEART_BEAT_INTERVAL);
+    }
+    console.log('heartbeat ' + enabled);
+}
+
+function receivedHeartBeat() {
+    setHeartBeat(true);
+}
+
 //playing and enqueuing should go through here
 //song can be either an array or a string.
 function playSong(song, enqueueAll) {
