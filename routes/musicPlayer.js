@@ -107,7 +107,7 @@ function receivedHeartBeat() {
 //song can be either an array or a string.
 function playSong(song, enqueueAll) {
     var filesToPlay = [];
-    var toPlay = song;
+    var toPlay = path.join(musicRootDir, song);
     if (!toPlay) {
         return;
     }
@@ -146,7 +146,7 @@ function playSong(song, enqueueAll) {
     }
 
     var pl = filesToPlay.map(function(fileToPlay) {
-        return { fileName: fileToPlay };
+        return { fileName: path.relative(musicRootDir, fileToPlay) };
     });
     if (!enqueueAll) {
         playlist = pl;
@@ -157,8 +157,9 @@ function playSong(song, enqueueAll) {
     //get song info for existing files (not urls)
     if (ls) {
         player.getSongInfo(filesToPlay, function(result) {
+            console.log(result);
             result.forEach(function(item) {
-                item.fileName = path.basename(item.fileName);
+                item.fileName = path.relative(musicRootDir, item.fileName);
             });
             if (!enqueueAll) {
                 playlist = result;
@@ -170,6 +171,16 @@ function playSong(song, enqueueAll) {
     }
 }
 
+router.get('/status', function(req, res, next) {
+    res.json({
+        status: player.getStatus(),    //stopped, playing, paused
+        type: type,    //music, radio
+        index: currPlayIndex,  //currently playing song index
+        playlist: playlist,    //whole playlist
+        volume: player.volume(),    //current volume
+    });
+});
+
 router.post('/enqueue', function(req, res, next) {
     var toEnqueue = req.body.toEnqueue;
     if (toEnqueue) {
@@ -180,10 +191,10 @@ router.post('/enqueue', function(req, res, next) {
 
 router.get('/play', function(req, res, next) {
     if (type !== 'music') {
-        initMusic(req.param.song || musicRootDir);
+        initMusic(req.param.song || '');
     } else {
         if (req.param.song) {
-            playSong(musicRootDir + req.param.song);
+            playSong(req.param.song);
             //player.play(req.param.song);
         } else {
             //playSong(musicRootDir);

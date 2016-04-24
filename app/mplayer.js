@@ -92,6 +92,7 @@ mplayer.prototype.play = function(fileOrUrl) {
 		this.shutdown();
     	this.playlist = [fileOrUrl];
     	this.terminal.stdin.write('mplayer -slave -quiet -novideo "' + fileOrUrl + '"\n');
+        this.volume(this.currentVolume);    //set the initial volume
     	this.status = "playing";
 	} else {
 		if (this.status === "paused") {
@@ -246,6 +247,10 @@ mplayer.prototype.getSongInfo = function(fileNames, callback) {
 	terminal.stdin.write('mplayer -vo null -ao null -identify -frames 0 "' + files[index] + '"\n');
 
 	
+}
+
+mplayer.prototype.getStatus = function() {
+    return this.status;
 }
 
 module.exports = new mplayer();
